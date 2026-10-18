@@ -1,0 +1,62 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentic-ops"
+version = "0.1.0"
+description = "ERP-agnostic agentic operations platform (Odoo as first adapter)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "pydantic-settings",
+    "sqlalchemy",
+    "alembic",
+    "psycopg[binary]",
+    "pgvector",
+    "httpx",
+    "tenacity",
+    "langchain-core",
+    "langchain-openai",
+    "langgraph",
+    "langgraph-checkpoint-postgres",
+    "langsmith",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "ruff",
+    "mypy",
+    "pre-commit",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentic_ops"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.ruff.format]
+quote-style = "single"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+markers = [
+    "contract: tests every ErpPort implementation must pass",
+    "integration: tests needing external services (Postgres, Odoo)",
+]
