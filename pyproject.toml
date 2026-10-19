@@ -51,7 +51,7 @@ quote-style = "single"
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src"]
+files = ["src", "tests"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
