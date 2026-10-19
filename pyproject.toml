@@ -60,3 +60,4 @@ markers = [
     "contract: tests every ErpPort implementation must pass",
     "integration: tests needing external services (Postgres, Odoo)",
 ]
+
