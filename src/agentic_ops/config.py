@@ -16,6 +16,11 @@ class Settings(BaseSettings):
         url = self.database_url.get_secret_value()
         return url.replace('postgresql://', 'postgresql+psycopg://', 1)
 
+    groq_api_key: SecretStr | None = None
+    cerebras_api_key: SecretStr | None = None
+    openrouter_api_key: SecretStr | None = None
+    gemini_api_key: SecretStr | None = None
+
 
 @lru_cache
 def get_settings() -> Settings:
