@@ -1,4 +1,5 @@
 from enum import StrEnum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
@@ -19,3 +20,12 @@ class ModelSpec(BaseModel):
     provider: str
     model_id: str
     supports_tools: bool
+
+
+class Skipped(BaseModel):
+    """A route that was passed over, and why; the raw material for fallback metrics."""
+
+    model_config = ConfigDict(frozen=True)
+
+    spec: ModelSpec
+    reason: Literal['rate_limited', 'unavailable']

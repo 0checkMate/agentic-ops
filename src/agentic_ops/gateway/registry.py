@@ -26,3 +26,7 @@ class ModelRegistry:
         if not specs:
             raise GatewayConfigError(f'Alias {alias.value!r} has no tool-capable model')
         return specs
+
+    def all_specs(self) -> list[ModelSpec]:
+        """Every configured route entry across all aliases, for startup validation."""
+        return [spec for route in self._routes.values() for spec in route]

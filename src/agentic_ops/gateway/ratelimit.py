@@ -67,6 +67,11 @@ class RateLimiter:
         start = clock()
         self._buckets = {key: self._build(limit, start) for key, limit in limits.items()}
 
+    @property
+    def keys(self) -> frozenset[str]:
+        """The keys that have a configured limit."""
+        return frozenset(self._buckets)
+
     @staticmethod
     def _build(limit: RateLimit, now: float) -> dict[str, _Bucket]:
         buckets: dict[str, _Bucket] = {}
