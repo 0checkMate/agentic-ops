@@ -18,4 +18,4 @@ def test_migrations_round_trip(alembic_config: Config) -> None:
         tables = inspect(engine).get_table_names()
     finally:
         engine.dispose()
-    assert 'audit_log' in tables
+    assert {'audit_log', 'cache_entry'} <= set(tables)

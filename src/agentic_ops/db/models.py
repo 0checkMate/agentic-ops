@@ -21,3 +21,16 @@ class AuditLog(Base):
     event_type: Mapped[str] = mapped_column(String(32))
     actor: Mapped[str] = mapped_column(String(64))
     payload: Mapped[dict[str, Any]] = mapped_column(JSONB, server_default=text("'{}'::jsonb"))
+
+
+class CacheEntry(Base):
+    """Persistent response cache row; the key is the SHA-256 digest from cache_key()."""
+
+    __tablename__ = 'cache_entry'
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
