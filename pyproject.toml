@@ -34,6 +34,7 @@ dev = [
     "ruff",
     "mypy",
     "pre-commit",
+    "httpx2"
 ]
 
 [tool.hatch.build.targets.wheel]

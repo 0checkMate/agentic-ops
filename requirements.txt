@@ -1,4 +1,4 @@
--e git+ssh://git@github.com/0checkMate/agentic-ops.git@6b36a5b5aa163815627beb3ee1dec3b21b651683#egg=agentic_ops
+-e git+ssh://git@github.com/0checkMate/agentic-ops.git@357908cd3efc772dd0e37384d4f49bbf1a8dbf9b#egg=agentic_ops
 alembic==1.20.0
 annotated-doc==0.0.5
 annotated-types==0.8.0

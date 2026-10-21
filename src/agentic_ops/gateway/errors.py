@@ -25,6 +25,18 @@ class ProviderUnavailable(GatewayError):
     """A provider failed in a way another route may not: outage, timeout, server error."""
 
 
+class ProviderRateLimited(GatewayError):
+    """A provider rejected the call with HTTP 429; another route has its own budget.
+
+    retry_after is the provider's Retry-After in seconds, or None when the header is
+    absent or unusable.
+    """
+
+    def __init__(self, message: str, *, retry_after: float | None) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
 class GatewayExhausted(GatewayError):
     """Every eligible route was skipped; skipped records why, route by route."""
 

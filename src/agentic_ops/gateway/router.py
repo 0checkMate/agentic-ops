@@ -5,6 +5,7 @@ from agentic_ops.gateway.errors import (
     GatewayConfigError,
     GatewayExhausted,
     GatewayRateLimited,
+    ProviderRateLimited,
     ProviderUnavailable,
 )
 from agentic_ops.gateway.models import Alias, ModelSpec, Skipped
@@ -58,8 +59,9 @@ class Gateway:
     ) -> RouteOutcome[T]:
         """Try each route in priority order until one serves the call.
 
-        A route is skipped, not retried, when its budget is exhausted or the provider
-        reports ProviderUnavailable. Any other exception is a bug or a bad request and
+        A route is skipped, not retried, when its local budget is exhausted
+        or the provider reports ProviderRateLimited (HTTP 429) or ProviderUnavailable.
+        Any other exception is a bug or a bad request and
         propagates, so it is never replayed against every provider's quota.
         """
         route = self._registry.resolve(alias, require_tools=require_tools)
@@ -74,6 +76,9 @@ class Gateway:
                 continue
             try:
                 value = await call(spec)
+            except ProviderRateLimited:
+                skipped.append(Skipped(spec=spec, reason='rate_limited'))
+                continue
             except ProviderUnavailable:
                 skipped.append(Skipped(spec=spec, reason='unavailable'))
                 continue
