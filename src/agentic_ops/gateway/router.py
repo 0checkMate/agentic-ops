@@ -40,6 +40,7 @@ class Gateway:
         limiter: RateLimiter,
         *,
         last_route_wait: float = 0.0,
+        default_penalty: float = 60.0,
     ) -> None:
         missing = sorted({limiter_key(spec) for spec in registry.all_specs()} - limiter.keys)
         if missing:
@@ -48,6 +49,7 @@ class Gateway:
         self._registry = registry
         self._limiter = limiter
         self._last_route_wait = last_route_wait
+        self._default_penalty = default_penalty
 
     async def run[T](
         self,
@@ -76,7 +78,9 @@ class Gateway:
                 continue
             try:
                 value = await call(spec)
-            except ProviderRateLimited:
+            except ProviderRateLimited as exc:
+                penalty = self._default_penalty if exc.retry_after is None else exc.retry_after
+                self._limiter.penalize(limiter_key(spec), penalty)
                 skipped.append(Skipped(spec=spec, reason='rate_limited'))
                 continue
             except ProviderUnavailable:

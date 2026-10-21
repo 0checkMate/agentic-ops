@@ -203,3 +203,92 @@ async def test_router_exhausts_when_every_provider_rate_limits() -> None:
     with pytest.raises(GatewayExhausted) as info:
         await _gateway().run(Alias.DEFAULT, call)
     assert [item.reason for item in info.value.skipped] == ['rate_limited', 'rate_limited']
+
+
+class _RouterClock:
+    def __init__(self) -> None:
+        self.now = 1_000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+    async def sleep(self, seconds: float) -> None:
+        self.now += seconds
+
+
+def _penalty_gateway(clock: _RouterClock, *, default_penalty: float = 60.0) -> Gateway:
+    registry = ModelRegistry({Alias.DEFAULT: [SPEC_A, SPEC_B]})
+    limiter = RateLimiter(
+        {
+            'groq:model-a': RateLimit(requests_per_minute=100),
+            'gemini:model-b': RateLimit(requests_per_minute=100),
+        },
+        clock=clock,
+        sleep=clock.sleep,
+    )
+    return Gateway(registry, limiter, default_penalty=default_penalty)
+
+
+async def test_provider_429_blocks_the_route_without_another_call() -> None:
+    clock = _RouterClock()
+    gateway = _penalty_gateway(clock)
+    calls: list[ModelSpec] = []
+
+    async def call(spec: ModelSpec) -> str:
+        calls.append(spec)
+        if spec == SPEC_A:
+            raise ProviderRateLimited('429', retry_after=30.0)
+        return 'served'
+
+    await gateway.run(Alias.DEFAULT, call)
+    calls.clear()
+    outcome = await gateway.run(Alias.DEFAULT, call)
+    assert calls == [SPEC_B]
+    assert [(item.spec, item.reason) for item in outcome.skipped] == [(SPEC_A, 'rate_limited')]
+
+
+async def test_route_is_retried_after_the_penalty_elapses() -> None:
+    clock = _RouterClock()
+    gateway = _penalty_gateway(clock)
+    calls: list[ModelSpec] = []
+
+    tripped = False
+
+    async def call(spec: ModelSpec) -> str:
+        nonlocal tripped
+        calls.append(spec)
+        if spec == SPEC_A and not tripped:
+            tripped = True
+            raise ProviderRateLimited('429', retry_after=30.0)
+        return 'served'
+
+    await gateway.run(Alias.DEFAULT, call)
+    clock.now += 31
+    calls.clear()
+    outcome = await gateway.run(Alias.DEFAULT, call)
+    assert outcome.spec == SPEC_A
+    assert calls == [SPEC_A]
+
+
+async def test_missing_retry_after_uses_the_default_penalty() -> None:
+    clock = _RouterClock()
+    gateway = _penalty_gateway(clock, default_penalty=45.0)
+    calls: list[ModelSpec] = []
+
+    tripped = False
+
+    async def call(spec: ModelSpec) -> str:
+        nonlocal tripped
+        calls.append(spec)
+        if spec == SPEC_A and not tripped:
+            tripped = True
+            raise ProviderRateLimited('429', retry_after=None)
+        return 'served'
+
+    await gateway.run(Alias.DEFAULT, call)
+    clock.now += 40
+    calls.clear()
+    assert (await gateway.run(Alias.DEFAULT, call)).spec == SPEC_B
+    clock.now += 10
+    calls.clear()
+    assert (await gateway.run(Alias.DEFAULT, call)).spec == SPEC_A

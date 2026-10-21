@@ -11,6 +11,7 @@ Clock = Callable[[], float]
 Sleeper = Callable[[float], Awaitable[None]]
 
 _EPSILON = 1e-9
+_MAX_PENALTY = 86400.0
 
 
 class RateLimit(BaseModel):
@@ -66,6 +67,7 @@ class RateLimiter:
         self._sleep = sleep
         start = clock()
         self._buckets = {key: self._build(limit, start) for key, limit in limits.items()}
+        self._blocked_until: dict[str, float] = {}
 
     @property
     def keys(self) -> frozenset[str]:
@@ -86,6 +88,18 @@ class RateLimiter:
             buckets['requests_day'] = _Bucket(rpd, rpd / 86400, now)
         return buckets
 
+    def penalize(self, key: str, seconds: float) -> None:
+        """Block a key for seconds, capped at one day; a block is never shortened.
+
+        Called when a provider returns HTTP 429: its answer outranks our local estimate.
+        """
+        if key not in self._buckets:
+            raise GatewayConfigError(f'No rate limit configured for {key!r}')
+        if seconds < 0:
+            raise ValueError('seconds must be non-negative')
+        deadline = self._clock() + min(seconds, _MAX_PENALTY)
+        self._blocked_until[key] = max(self._blocked_until.get(key, 0.0), deadline)
+
     async def acquire(self, key: str, tokens: int = 0, *, max_wait: float) -> None:
         """Reserve one request and tokens of budget, waiting at most max_wait seconds.
 
@@ -103,7 +117,9 @@ class RateLimiter:
         waited = 0.0
         while True:
             now = self._clock()
-            wait = max((bucket.wait_for(cost, now) for bucket, cost in costs), default=0.0)
+            blocked = max(0.0, self._blocked_until.get(key, 0.0) - now)
+            bucket_wait = max((bucket.wait_for(cost, now) for bucket, cost in costs), default=0.0)
+            wait = max(bucket_wait, blocked)
             if wait == 0.0:
                 for bucket, cost in costs:
                     bucket.consume(cost)
