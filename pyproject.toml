@@ -21,6 +21,7 @@ dependencies = [
     "tenacity",
     "langchain-core",
     "langchain-openai",
+    "openai",
     "langgraph",
     "langgraph-checkpoint-postgres",
     "langsmith",
