@@ -22,6 +22,7 @@ class RateLimit(BaseModel):
     requests_per_minute: int | None = Field(default=None, gt=0)
     tokens_per_minute: int | None = Field(default=None, gt=0)
     requests_per_day: int | None = Field(default=None, gt=0)
+    tokens_per_day: int | None = Field(default=None, gt=0)
 
 
 class _Bucket:
@@ -86,6 +87,9 @@ class RateLimiter:
         if limit.requests_per_day is not None:
             rpd = limit.requests_per_day
             buckets['requests_day'] = _Bucket(rpd, rpd / 86400, now)
+        if limit.tokens_per_day is not None:
+            tpd = limit.tokens_per_day
+            buckets['tokens_day'] = _Bucket(tpd, tpd / 86400, now)
         return buckets
 
     def penalize(self, key: str, seconds: float) -> None:
@@ -111,7 +115,7 @@ class RateLimiter:
         if buckets is None:
             raise GatewayConfigError(f'No rate limit configured for {key!r}')
         costs = [
-            (bucket, float(tokens) if name == 'tokens_minute' else 1.0)
+            (bucket, float(tokens) if name.startswith('tokens_') else 1.0)
             for name, bucket in buckets.items()
         ]
         waited = 0.0

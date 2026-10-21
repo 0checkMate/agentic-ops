@@ -1,6 +1,7 @@
 import math
 
 import pytest
+from pydantic import ValidationError
 
 from agentic_ops.gateway.errors import GatewayConfigError, GatewayRateLimited
 from agentic_ops.gateway.ratelimit import RateLimit, RateLimiter
@@ -192,3 +193,25 @@ def test_penalize_rejects_a_negative_duration() -> None:
     limiter = _penalty_limiter(_PenaltyClock())
     with pytest.raises(ValueError, match='non-negative'):
         limiter.penalize('p:a', -1.0)
+
+
+async def test_daily_token_budget_is_enforced() -> None:
+    clock = _PenaltyClock()
+    limiter = RateLimiter({'p:a': RateLimit(tokens_per_day=1000)}, clock=clock, sleep=clock.sleep)
+    await limiter.acquire('p:a', 600, max_wait=0.0)
+    with pytest.raises(GatewayRateLimited) as info:
+        await limiter.acquire('p:a', 600, max_wait=0.0)
+    assert info.value.retry_after == pytest.approx(200 / (1000 / 86400))
+
+
+async def test_request_larger_than_the_daily_token_budget_can_never_fit() -> None:
+    clock = _PenaltyClock()
+    limiter = RateLimiter({'p:a': RateLimit(tokens_per_day=1000)}, clock=clock, sleep=clock.sleep)
+    with pytest.raises(GatewayRateLimited) as info:
+        await limiter.acquire('p:a', 1001, max_wait=0.0)
+    assert info.value.retry_after == float('inf')
+
+
+def test_daily_token_limit_must_be_positive() -> None:
+    with pytest.raises(ValidationError):
+        RateLimit(tokens_per_day=0)
