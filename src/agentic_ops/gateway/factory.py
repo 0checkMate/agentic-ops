@@ -6,6 +6,8 @@ from agentic_ops.gateway.errors import GatewayConfigError
 from agentic_ops.gateway.models import ModelSpec
 from agentic_ops.gateway.providers import PROVIDERS
 
+REQUEST_TIMEOUT_SECONDS = 60.0
+
 
 def build_chat_model(
     spec: ModelSpec, settings: Settings, *, temperature: float = 0.0
@@ -27,4 +29,5 @@ def build_chat_model(
         api_key=api_key,
         temperature=temperature,
         max_retries=0,
+        timeout=REQUEST_TIMEOUT_SECONDS,
     )
