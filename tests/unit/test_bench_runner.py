@@ -173,3 +173,14 @@ def test_cache_hit_rate_covers_all_results() -> None:
 def test_summarising_nothing_is_an_error() -> None:
     with pytest.raises(ValueError):
         summarize('m', [])
+
+
+async def test_rejected_observation_is_scored_by_what_was_expected() -> None:
+    rejected = Observation(calls=(), cache_hit=False, rejected=True)
+    observe = scripted({'c1': rejected, 'c2': seen(STOCK), 'c3': rejected})
+    results = await run_suite(make_suite(), observe, clock=flat_clock)
+    assert [item.verdict for item in results] == [
+        Verdict.INVALID_CALL,
+        Verdict.CORRECT,
+        Verdict.SPURIOUS_CALL,
+    ]

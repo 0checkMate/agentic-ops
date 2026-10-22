@@ -5,7 +5,12 @@ import pytest
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolCall
 
 from agentic_ops.bench.cases import BenchCase, ToolDef
-from agentic_ops.bench.observer import build_observer, estimate_tokens, extract_calls
+from agentic_ops.bench.observer import (
+    ToolCallRejected,
+    build_observer,
+    estimate_tokens,
+    extract_calls,
+)
 from agentic_ops.bench.runner import Observe
 from agentic_ops.bench.scoring import ObservedCall
 from agentic_ops.gateway.cache import InMemoryCache
@@ -141,3 +146,14 @@ def test_missing_rate_limit_fails_at_build_time() -> None:
 def test_model_without_tool_support_fails_at_build_time() -> None:
     with pytest.raises(GatewayConfigError, match='tool'):
         observer_for(NO_TOOLS, FakeModel([]))
+
+
+async def test_rejected_call_is_reported_and_cached() -> None:
+    model = FakeModel(ToolCallRejected('schema violation'))
+    observe = observer_for(SPEC_A, model)
+    first = await observe(CASE)
+    second = await observe(CASE)
+    assert first.rejected and second.rejected
+    assert first.calls == ()
+    assert second.cache_hit is True
+    assert model.invocations == 1

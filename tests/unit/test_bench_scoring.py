@@ -113,3 +113,11 @@ def test_accuracy_counts_correct_and_correct_abstain() -> None:
 def test_accuracy_of_nothing_is_an_error() -> None:
     with pytest.raises(ValueError):
         tool_call_accuracy([])
+
+
+def test_rejected_call_is_invalid_when_a_call_was_expected() -> None:
+    assert score_case(expected(sku='A'), [], rejected=True) is Verdict.INVALID_CALL
+
+
+def test_rejected_call_is_spurious_when_none_was_expected() -> None:
+    assert score_case(None, [], rejected=True) is Verdict.SPURIOUS_CALL

@@ -14,6 +14,7 @@ class Verdict(StrEnum):
     NO_CALL = 'no_call'
     SPURIOUS_CALL = 'spurious_call'
     CORRECT_ABSTAIN = 'correct_abstain'
+    INVALID_CALL = 'invalid_call'
 
 
 class ExpectedCall(BaseModel):
@@ -59,11 +60,18 @@ def _equal(want: object, got: object) -> bool:
     return want == got
 
 
-def score_case(expected: ExpectedCall | None, observed: Sequence[ObservedCall]) -> Verdict:
+def score_case(
+    expected: ExpectedCall | None, observed: Sequence[ObservedCall], *, rejected: bool = False
+) -> Verdict:
     """Classify one case; expected None means the model should answer without a tool.
 
-    Only the first observed call is scored: these cases are single-step by design.
+    rejected means the provider refused the model's own tool call as schema-invalid. That
+    is a failure of the model, scored by what the case wanted: a spurious call when no
+    tool was expected, an invalid call otherwise. Only the first observed call is scored:
+    these cases are single-step by design.
     """
+    if rejected:
+        return Verdict.SPURIOUS_CALL if expected is None else Verdict.INVALID_CALL
     if expected is None:
         return Verdict.SPURIOUS_CALL if observed else Verdict.CORRECT_ABSTAIN
     if not observed:

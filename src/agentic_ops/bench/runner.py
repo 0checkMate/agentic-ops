@@ -17,6 +17,7 @@ class Observation(BaseModel):
 
     calls: tuple[ObservedCall, ...]
     cache_hit: bool
+    rejected: bool = False
 
 
 Observe = Callable[[BenchCase], Awaitable[Observation]]
@@ -78,7 +79,7 @@ async def run_suite(
         results.append(
             CaseResult(
                 case_id=case.id,
-                verdict=score_case(case.expected, observation.calls),
+                verdict=score_case(case.expected, observation.calls, rejected=observation.rejected),
                 latency_ms=(clock() - start) * 1000,
                 cache_hit=observation.cache_hit,
                 error=None,

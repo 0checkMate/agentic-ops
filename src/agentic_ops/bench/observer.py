@@ -4,6 +4,7 @@ from collections.abc import Awaitable, Callable, Mapping, Sequence
 from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
+from openai import BadRequestError
 
 from agentic_ops.bench.cases import BenchCase, ToolDef
 from agentic_ops.bench.runner import Observation, Observe
@@ -23,6 +24,24 @@ ModelCall = Callable[[ModelSpec, str, Sequence[ToolDef]], Awaitable[BaseMessage]
 TEMPERATURE = 0.0
 _OUTPUT_ALLOWANCE = 150
 _MAX_WAIT_SECONDS = 120.0
+
+
+class ToolCallRejected(Exception):
+    """The provider refused the model's own tool call as schema-invalid (HTTP 400).
+
+    Deliberately not a GatewayError: it must pass through Gateway.run untouched, so a
+    bad call is never replayed against other providers' quotas.
+    """
+
+
+def _is_rejected_tool_call(exc: BaseException) -> bool:
+    """True if the exception chain holds a Groq-style 400 with code tool_use_failed."""
+    current: BaseException | None = exc
+    while current is not None:
+        if isinstance(current, BadRequestError) and current.code == 'tool_use_failed':
+            return True
+        current = current.__cause__
+    return False
 
 
 def extract_calls(message: BaseMessage) -> tuple[ObservedCall, ...]:
@@ -73,9 +92,12 @@ def build_observer(
             async def call(route: ModelSpec) -> BaseMessage:
                 return await call_model(route, case.prompt, tools)
 
-            outcome = await gateway.run(
-                Alias.DEFAULT, call, require_tools=True, estimated_tokens=estimate
-            )
+            try:
+                outcome = await gateway.run(
+                    Alias.DEFAULT, call, require_tools=True, estimated_tokens=estimate
+                )
+            except ToolCallRejected:
+                return {'calls': [], 'rejected': True}
             calls = extract_calls(outcome.value)
             return {'calls': [item.model_dump(mode='json') for item in calls]}
 
@@ -83,7 +105,8 @@ def build_observer(
             cache, cache_key(namespace=f'bench:{key}', request=request), compute
         )
         calls = tuple(ObservedCall.model_validate(item) for item in result.value['calls'])
-        return Observation(calls=calls, cache_hit=result.hit)
+        rejected = bool(result.value.get('rejected', False))
+        return Observation(calls=calls, cache_hit=result.hit, rejected=rejected)
 
     return observe
 
@@ -97,6 +120,8 @@ def tool_bound_call(settings: Settings) -> ModelCall:
         try:
             return await bound.ainvoke([HumanMessage(content=prompt)])
         except Exception as exc:
+            if _is_rejected_tool_call(exc):
+                raise ToolCallRejected(str(exc)) from exc
             translated = translate_provider_error(exc)
             if translated is None:
                 raise

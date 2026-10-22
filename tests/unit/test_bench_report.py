@@ -70,13 +70,13 @@ def test_verdict_table_lists_every_class_in_enum_order() -> None:
     text = render_markdown(make_report())
     header = (
         '| Model | correct | wrong_tool | bad_arguments | no_call'
-        ' | spurious_call | correct_abstain |'
+        ' | spurious_call | correct_abstain | invalid_call |'
     )
     assert header in text
 
 
 def test_verdict_row_carries_the_counts() -> None:
-    assert '| groq:m1 | 3 | 1 | 0 | 0 | 0 | 0 |' in render_markdown(make_report())
+    assert '| groq:m1 | 3 | 1 | 0 | 0 | 0 | 0 | 0 |' in render_markdown(make_report())
 
 
 def test_limits_section_lists_enforced_dimensions_only() -> None:
