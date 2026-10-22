@@ -1,0 +1,116 @@
+{
+  "version": "procurement_v1",
+  "tools": [
+    {
+      "name": "get_stock_level",
+      "description": "Get the current on-hand stock in kilograms for one SKU, optionally limited to one warehouse.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "sku": {"type": "string", "description": "SKU code, for example FLOUR-001."},
+          "warehouse": {"type": "string", "description": "Warehouse code, for example W1."}
+        },
+        "required": ["sku"]
+      }
+    },
+    {
+      "name": "list_open_purchase_orders",
+      "description": "List purchase orders that are still open, optionally for one supplier.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "supplier": {"type": "string", "description": "Supplier name."}
+        },
+        "required": []
+      }
+    },
+    {
+      "name": "draft_purchase_order",
+      "description": "Create a DRAFT purchase order for a supplier. A human must confirm it before it is sent.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "supplier": {"type": "string", "description": "Supplier name."},
+          "lines": {
+            "type": "array",
+            "description": "Order lines.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "sku": {"type": "string"},
+                "quantity_kg": {"type": "number", "description": "Quantity in kilograms."}
+              },
+              "required": ["sku", "quantity_kg"]
+            }
+          }
+        },
+        "required": ["supplier", "lines"]
+      }
+    },
+    {
+      "name": "list_expiring_lots",
+      "description": "List stock lots that expire within a number of days, optionally for one warehouse.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "within_days": {"type": "integer", "description": "Look-ahead window in days."},
+          "warehouse": {"type": "string", "description": "Warehouse code, for example W1."}
+        },
+        "required": ["within_days"]
+      }
+    }
+  ],
+  "cases": [
+    {"id": "stock-01", "prompt": "How many kilograms of SKU FLOUR-001 do we have in stock?",
+     "expected": {"name": "get_stock_level", "args": {"sku": "FLOUR-001"}}},
+    {"id": "stock-02", "prompt": "Check stock of SUGAR-010 in warehouse W2.",
+     "expected": {"name": "get_stock_level", "args": {"sku": "SUGAR-010", "warehouse": "W2"}}},
+    {"id": "stock-03", "prompt": "What is the on-hand quantity for PACK-500ML at W1?",
+     "expected": {"name": "get_stock_level", "args": {"sku": "PACK-500ML", "warehouse": "W1"}}},
+    {"id": "stock-04", "prompt": "Are we running low on YEAST-003?",
+     "expected": {"name": "get_stock_level", "args": {"sku": "YEAST-003"}}},
+    {"id": "stock-05", "prompt": "Before I order more, how much SUGAR-010 is on hand?",
+     "expected": {"name": "get_stock_level", "args": {"sku": "SUGAR-010"}}},
+    {"id": "po-list-01", "prompt": "Show me all open purchase orders.",
+     "expected": {"name": "list_open_purchase_orders", "args": {}}},
+    {"id": "po-list-02", "prompt": "Which purchase orders are still open with Acme Mills?",
+     "expected": {"name": "list_open_purchase_orders", "args": {"supplier": "Acme Mills"}}},
+    {"id": "po-list-03", "prompt": "List open POs for Rift Valley Packaging.",
+     "expected": {"name": "list_open_purchase_orders", "args": {"supplier": "Rift Valley Packaging"}}},
+    {"id": "po-list-04", "prompt": "Do we have anything outstanding from Savanna Dairy Co?",
+     "expected": {"name": "list_open_purchase_orders", "args": {"supplier": "Savanna Dairy Co"}}},
+    {"id": "po-draft-01", "prompt": "Draft a purchase order to Acme Mills for 500 kg of FLOUR-001.",
+     "expected": {"name": "draft_purchase_order",
+                  "args": {"supplier": "Acme Mills",
+                           "lines": [{"sku": "FLOUR-001", "quantity_kg": 500}]}}},
+    {"id": "po-draft-02", "prompt": "Prepare a PO for Rift Valley Packaging: 250 kg of PACK-FILM-002 and 40 kg of LABEL-GLUE-001.",
+     "expected": {"name": "draft_purchase_order",
+                  "args": {"supplier": "Rift Valley Packaging",
+                           "lines": [{"sku": "PACK-FILM-002", "quantity_kg": 250},
+                                     {"sku": "LABEL-GLUE-001", "quantity_kg": 40}]}}},
+    {"id": "po-draft-03", "prompt": "Create a draft order with Savanna Dairy Co for 1.5 tonnes of MILK-POW-025.",
+     "expected": {"name": "draft_purchase_order",
+                  "args": {"supplier": "Savanna Dairy Co",
+                           "lines": [{"sku": "MILK-POW-025", "quantity_kg": 1500}]}}},
+    {"id": "po-draft-04", "prompt": "Raise a draft PO to Acme Mills for 120 kg of SUGAR-010 and 80 kg of FLOUR-001.",
+     "expected": {"name": "draft_purchase_order",
+                  "args": {"supplier": "Acme Mills",
+                           "lines": [{"sku": "SUGAR-010", "quantity_kg": 120},
+                                     {"sku": "FLOUR-001", "quantity_kg": 80}]}}},
+    {"id": "expiry-01", "prompt": "Which lots expire within the next 14 days?",
+     "expected": {"name": "list_expiring_lots", "args": {"within_days": 14}}},
+    {"id": "expiry-02", "prompt": "Show expiring lots in the next two weeks at warehouse W1.",
+     "expected": {"name": "list_expiring_lots", "args": {"within_days": 14, "warehouse": "W1"}}},
+    {"id": "expiry-03", "prompt": "What will go out of date within 30 days?",
+     "expected": {"name": "list_expiring_lots", "args": {"within_days": 30}}},
+    {"id": "expiry-04", "prompt": "Which lots expire within 7 days?",
+     "expected": {"name": "list_expiring_lots", "args": {"within_days": 7}}},
+    {"id": "expiry-05", "prompt": "List lots expiring in 10 days in W2.",
+     "expected": {"name": "list_expiring_lots", "args": {"within_days": 10, "warehouse": "W2"}}},
+    {"id": "abstain-01", "prompt": "What does HACCP stand for?", "expected": null},
+    {"id": "abstain-02", "prompt": "Order some flour for us.", "expected": null},
+    {"id": "abstain-03", "prompt": "Thanks, that is all for now.", "expected": null},
+    {"id": "abstain-04", "prompt": "Explain the difference between FIFO and FEFO stock rotation.", "expected": null},
+    {"id": "abstain-05", "prompt": "Draft a purchase order for sugar.", "expected": null}
+  ]
+}
