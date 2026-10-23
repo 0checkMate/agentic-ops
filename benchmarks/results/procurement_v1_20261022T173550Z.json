@@ -1,0 +1,577 @@
+{
+  "suite_version": "procurement_v1",
+  "generated_at": "2026-10-22T17:35:50.367983+00:00",
+  "limits": {
+    "groq:openai/gpt-oss-20b": {
+      "requests_per_minute": 30,
+      "tokens_per_minute": 8000,
+      "requests_per_day": 1000,
+      "tokens_per_day": 200000
+    },
+    "groq:openai/gpt-oss-120b": {
+      "requests_per_minute": 30,
+      "tokens_per_minute": 8000,
+      "requests_per_day": 1000,
+      "tokens_per_day": 200000
+    },
+    "gemini:gemini-3.5-flash-lite": {
+      "requests_per_minute": 15,
+      "tokens_per_minute": null,
+      "requests_per_day": 1500,
+      "tokens_per_day": null
+    }
+  },
+  "summaries": [
+    {
+      "model": "groq:openai/gpt-oss-20b",
+      "cases": 23,
+      "scored": 23,
+      "errors": 0,
+      "accuracy": 0.9565217391304348,
+      "spurious_call_rate": 0.0,
+      "verdict_counts": {
+        "correct": 17,
+        "wrong_tool": 0,
+        "bad_arguments": 1,
+        "no_call": 0,
+        "spurious_call": 0,
+        "correct_abstain": 5,
+        "invalid_call": 0
+      },
+      "latency_p50_ms": null,
+      "latency_p95_ms": null,
+      "cache_hit_rate": 1.0
+    },
+    {
+      "model": "groq:openai/gpt-oss-120b",
+      "cases": 23,
+      "scored": 23,
+      "errors": 0,
+      "accuracy": 0.9565217391304348,
+      "spurious_call_rate": 0.0,
+      "verdict_counts": {
+        "correct": 17,
+        "wrong_tool": 0,
+        "bad_arguments": 0,
+        "no_call": 0,
+        "spurious_call": 0,
+        "correct_abstain": 5,
+        "invalid_call": 1
+      },
+      "latency_p50_ms": 3277.028704993427,
+      "latency_p95_ms": 4723.056617003749,
+      "cache_hit_rate": 0.21739130434782608
+    },
+    {
+      "model": "gemini:gemini-3.5-flash-lite",
+      "cases": 23,
+      "scored": 21,
+      "errors": 2,
+      "accuracy": 0.9047619047619048,
+      "spurious_call_rate": 0.4,
+      "verdict_counts": {
+        "correct": 16,
+        "wrong_tool": 0,
+        "bad_arguments": 0,
+        "no_call": 0,
+        "spurious_call": 2,
+        "correct_abstain": 3,
+        "invalid_call": 0
+      },
+      "latency_p50_ms": 7983.869442003197,
+      "latency_p95_ms": 17492.054128000746,
+      "cache_hit_rate": 0.08695652173913043
+    }
+  ],
+  "results": {
+    "groq:openai/gpt-oss-20b": [
+      {
+        "case_id": "stock-01",
+        "verdict": "correct",
+        "latency_ms": 5571.28508099413,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "stock-02",
+        "verdict": "correct",
+        "latency_ms": 1327.1965099993395,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "stock-03",
+        "verdict": "correct",
+        "latency_ms": 1227.8153599909274,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "stock-04",
+        "verdict": "correct",
+        "latency_ms": 863.0712820013287,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "stock-05",
+        "verdict": "correct",
+        "latency_ms": 855.6193489930592,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "po-list-01",
+        "verdict": "bad_arguments",
+        "latency_ms": 1051.7621650069486,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "po-list-02",
+        "verdict": "correct",
+        "latency_ms": 1177.9368290008279,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "po-list-03",
+        "verdict": "correct",
+        "latency_ms": 1280.0168270041468,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "po-list-04",
+        "verdict": "correct",
+        "latency_ms": 1433.8636299944483,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "po-draft-01",
+        "verdict": "correct",
+        "latency_ms": 1337.3585660010576,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "po-draft-02",
+        "verdict": "correct",
+        "latency_ms": 1325.4018489969894,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "po-draft-03",
+        "verdict": "correct",
+        "latency_ms": 1229.144502998679,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "po-draft-04",
+        "verdict": "correct",
+        "latency_ms": 1413.1816339940997,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "expiry-01",
+        "verdict": "correct",
+        "latency_ms": 1454.073298998992,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "expiry-02",
+        "verdict": "correct",
+        "latency_ms": 1434.1893079981674,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "expiry-03",
+        "verdict": "correct",
+        "latency_ms": 1433.4529560001101,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "expiry-04",
+        "verdict": "correct",
+        "latency_ms": 1638.587813009508,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "expiry-05",
+        "verdict": "correct",
+        "latency_ms": 1453.2157179928618,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "abstain-01",
+        "verdict": "correct_abstain",
+        "latency_ms": 1017.4733880121494,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "abstain-02",
+        "verdict": "correct_abstain",
+        "latency_ms": 1216.1672609945526,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "abstain-03",
+        "verdict": "correct_abstain",
+        "latency_ms": 1446.981364992098,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "abstain-04",
+        "verdict": "correct_abstain",
+        "latency_ms": 1152.4659659917234,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "abstain-05",
+        "verdict": "correct_abstain",
+        "latency_ms": 1099.1536729998188,
+        "cache_hit": true,
+        "error": null
+      }
+    ],
+    "groq:openai/gpt-oss-120b": [
+      {
+        "case_id": "stock-01",
+        "verdict": "correct",
+        "latency_ms": 1421.890281009837,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "stock-02",
+        "verdict": "correct",
+        "latency_ms": 1638.7063739966834,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "stock-03",
+        "verdict": "correct",
+        "latency_ms": 1433.8126170041505,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "stock-04",
+        "verdict": "correct",
+        "latency_ms": 1036.559225001838,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "stock-05",
+        "verdict": "correct",
+        "latency_ms": 1421.2948119966313,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "po-list-01",
+        "verdict": "invalid_call",
+        "latency_ms": 4711.351851001382,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "po-list-02",
+        "verdict": "correct",
+        "latency_ms": 2662.7375329990173,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "po-list-03",
+        "verdict": "correct",
+        "latency_ms": 3277.028704993427,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "po-list-04",
+        "verdict": "correct",
+        "latency_ms": 3078.2923759979894,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "po-draft-01",
+        "verdict": "correct",
+        "latency_ms": 4295.53853100515,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "po-draft-02",
+        "verdict": "correct",
+        "latency_ms": 3724.697429992375,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "po-draft-03",
+        "verdict": "correct",
+        "latency_ms": 3239.2255009908695,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "po-draft-04",
+        "verdict": "correct",
+        "latency_ms": 3277.3503920034273,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "expiry-01",
+        "verdict": "correct",
+        "latency_ms": 2867.5446919951355,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "expiry-02",
+        "verdict": "correct",
+        "latency_ms": 4096.6057689947775,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "expiry-03",
+        "verdict": "correct",
+        "latency_ms": 2673.2665129966335,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "expiry-04",
+        "verdict": "correct",
+        "latency_ms": 2858.0937429942423,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "expiry-05",
+        "verdict": "correct",
+        "latency_ms": 3233.027830006904,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "abstain-01",
+        "verdict": "correct_abstain",
+        "latency_ms": 3129.2982929880964,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "abstain-02",
+        "verdict": "correct_abstain",
+        "latency_ms": 3877.9924209957244,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "abstain-03",
+        "verdict": "correct_abstain",
+        "latency_ms": 4506.017630992574,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "abstain-04",
+        "verdict": "correct_abstain",
+        "latency_ms": 4723.056617003749,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "abstain-05",
+        "verdict": "correct_abstain",
+        "latency_ms": 3879.6383019944187,
+        "cache_hit": false,
+        "error": null
+      }
+    ],
+    "gemini:gemini-3.5-flash-lite": [
+      {
+        "case_id": "stock-01",
+        "verdict": "correct",
+        "latency_ms": 1606.4825909998035,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "stock-02",
+        "verdict": "correct",
+        "latency_ms": 1267.0736700092675,
+        "cache_hit": true,
+        "error": null
+      },
+      {
+        "case_id": "stock-03",
+        "verdict": "correct",
+        "latency_ms": 7971.021511009894,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "stock-04",
+        "verdict": "correct",
+        "latency_ms": 9002.209001992014,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "stock-05",
+        "verdict": "correct",
+        "latency_ms": 7743.867258992395,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "po-list-01",
+        "verdict": "correct",
+        "latency_ms": 9661.912221999955,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "po-list-02",
+        "verdict": "correct",
+        "latency_ms": 10370.089377000113,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "po-list-03",
+        "verdict": "correct",
+        "latency_ms": 16221.016256997245,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "po-list-04",
+        "verdict": null,
+        "latency_ms": 4913.346633999026,
+        "cache_hit": false,
+        "error": "GatewayExhausted: All routes failed for alias 'default'"
+      },
+      {
+        "case_id": "po-draft-01",
+        "verdict": "correct",
+        "latency_ms": 6752.709161999519,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "po-draft-02",
+        "verdict": "correct",
+        "latency_ms": 6789.155774997198,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "po-draft-03",
+        "verdict": "correct",
+        "latency_ms": 9994.907673011767,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "po-draft-04",
+        "verdict": "correct",
+        "latency_ms": 6549.907431006432,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "expiry-01",
+        "verdict": "correct",
+        "latency_ms": 13715.020399002242,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "expiry-02",
+        "verdict": "correct",
+        "latency_ms": 6550.6632500037085,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "expiry-03",
+        "verdict": "correct",
+        "latency_ms": 7983.869442003197,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "expiry-04",
+        "verdict": "correct",
+        "latency_ms": 7165.14999201172,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "expiry-05",
+        "verdict": null,
+        "latency_ms": 61696.44547300413,
+        "cache_hit": false,
+        "error": "GatewayExhausted: All routes failed for alias 'default'"
+      },
+      {
+        "case_id": "abstain-01",
+        "verdict": "correct_abstain",
+        "latency_ms": 17492.054128000746,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "abstain-02",
+        "verdict": "spurious_call",
+        "latency_ms": 5491.000574998907,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "abstain-03",
+        "verdict": "correct_abstain",
+        "latency_ms": 8477.250538999215,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "abstain-04",
+        "verdict": "correct_abstain",
+        "latency_ms": 9841.491608996876,
+        "cache_hit": false,
+        "error": null
+      },
+      {
+        "case_id": "abstain-05",
+        "verdict": "spurious_call",
+        "latency_ms": 7563.486778992228,
+        "cache_hit": false,
+        "error": null
+      }
+    ]
+  }
+}
