@@ -19,11 +19,16 @@ _GROQ_FREE = RateLimit(
 
 
 def default_registry() -> ModelRegistry:
-    """Provisional alias routes; the tool-calling benchmark confirms or revises them."""
+    """Alias routes ordered by the procurement_v1 tool-calling benchmark (2026-10-22).
+
+    Groq 20b and 120b tied on accuracy, so 20b leads FAST for its cheaper token budget.
+    OpenRouter serves the same 120b weights, so it is the like-for-like fallback.
+    Gemini is last: it invented write calls on underspecified requests.
+    """
     return ModelRegistry(
         {
-            Alias.FAST: [GROQ_20B, GEMINI_LITE, OPENROUTER_120B],
-            Alias.DEFAULT: [GROQ_120B, GEMINI_LITE, OPENROUTER_120B],
+            Alias.FAST: [GROQ_20B, OPENROUTER_120B, GEMINI_LITE],
+            Alias.DEFAULT: [GROQ_120B, OPENROUTER_120B, GEMINI_LITE],
             Alias.REASONING: [GROQ_120B, OPENROUTER_120B],
         }
     )
