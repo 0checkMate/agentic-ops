@@ -99,6 +99,7 @@ def render_markdown(report: BenchReport) -> str:
         '- With small case counts, differences of a few points are not statistically significant.',
         '- Errors are infrastructure failures; they are excluded from accuracy and latency.',
         '- Latency covers live scored calls only; cached calls are excluded.',
+        '- Latency includes any local rate-limiter waits, so it is not provider latency.',
     ]
     return '\n'.join(lines) + '\n'
 
