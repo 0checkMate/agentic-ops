@@ -65,3 +65,22 @@ jobs:
         run: pip install -c requirements.txt '.[dev]'
       - name: Integration tests
         run: pytest -m integration
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build image
+        run: docker build -t agentic-ops:ci .
+      - name: Smoke test
+        run: |
+          docker run -d --name app -p 8000:8000 \
+            -e AGENTIC_DATABASE_URL=postgresql://user:pass@localhost:5432/db \
+            agentic-ops:ci
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://localhost:8000/health; then exit 0; fi
+            sleep 1
+          done
+          docker logs app
+          exit 1
