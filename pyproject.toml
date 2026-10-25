@@ -9,8 +9,8 @@ description = "ERP-agnostic agentic operations platform (Odoo as first adapter)"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "fastapi",
-    "uvicorn",
+    "fastapi>=0.143.5",
+    "uvicorn>=0.54.0",
     "pydantic",
     "pydantic-settings",
     "sqlalchemy[asyncio]",
@@ -35,7 +35,8 @@ dev = [
     "ruff",
     "mypy",
     "pre-commit",
-    "httpx2"
+    "httpx2",
+    "httpx>=0.28.1"
 ]
 
 [tool.hatch.build.targets.wheel]
