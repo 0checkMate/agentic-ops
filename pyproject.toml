@@ -22,9 +22,10 @@ dependencies = [
     "langchain-core",
     "langchain-openai",
     "openai",
-    "langgraph",
-    "langgraph-checkpoint-postgres",
+    "langgraph>=1.2.16",
+    "langgraph-checkpoint-postgres>=3.2.0",
     "langsmith",
+    "psycopg>=3.3.6",
 ]
 
 [project.optional-dependencies]
