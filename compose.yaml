@@ -1,0 +1,32 @@
+services:
+  db:
+    image: pgvector/pgvector:pg18
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: agentic
+    ports:
+      - '127.0.0.1:5432:5432'
+    volumes:
+      - pgdata18:/var/lib/postgresql
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d agentic']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  workspace:
+    image: mcr.microsoft.com/devcontainers/python:1-3.12-bookworm
+    command: sleep infinity
+    volumes:
+      - .:/workspaces/agentic-ops:cached
+    environment:
+      AGENTIC_DATABASE_URL: postgresql://postgres:postgres@db:5432/agentic
+      AGENTIC_TEST_DATABASE_URL: postgresql://postgres:postgres@db:5432/agentic_test
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata18:
