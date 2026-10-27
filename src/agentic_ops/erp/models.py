@@ -87,3 +87,49 @@ class SupplierInvoice(DomainModel):
     purchase_order_ref: str
     invoice_date: datetime
     lines: tuple[SupplierInvoiceLine, ...] = Field(min_length=1)
+
+
+class SupplierLot(DomainModel):
+    ref: str
+    product_ref: str
+    receipt_ref: str
+    received_at: datetime
+    quantity: Decimal = Field(gt=0)
+
+
+class BatchConsumption(DomainModel):
+    supplier_lot_ref: str
+    quantity: Decimal = Field(gt=0)
+
+
+class ProductionBatch(DomainModel):
+    ref: str
+    name: str
+    started_at: datetime
+    lines: tuple[BatchConsumption, ...] = Field(min_length=1)
+
+
+class FinishedLot(DomainModel):
+    ref: str
+    batch_ref: str
+    product_name: str
+    produced_at: datetime
+    quantity: Decimal = Field(gt=0)
+    uom: str = 'unit'
+
+
+class Customer(DomainModel):
+    ref: str
+    name: str
+
+
+class ShipmentLine(DomainModel):
+    finished_lot_ref: str
+    quantity: Decimal = Field(gt=0)
+
+
+class Shipment(DomainModel):
+    ref: str
+    customer_ref: str
+    shipped_at: datetime
+    lines: tuple[ShipmentLine, ...] = Field(min_length=1)

@@ -12,16 +12,23 @@ from enum import StrEnum
 from typing import NamedTuple
 
 from agentic_ops.erp.models import (
+    BatchConsumption,
+    Customer,
+    FinishedLot,
     GoodsReceipt,
     GoodsReceiptLine,
     Partner,
     Product,
+    ProductionBatch,
     PurchaseOrder,
     PurchaseOrderLine,
     PurchaseOrderState,
+    Shipment,
+    ShipmentLine,
     StockLevel,
     SupplierInvoice,
     SupplierInvoiceLine,
+    SupplierLot,
 )
 
 ANCHOR = datetime(2026, 10, 1)
@@ -37,6 +44,9 @@ PRICE_TOLERANCE = Decimal('0.02')
 _BILLABLE = frozenset({PurchaseOrderState.PURCHASE, PurchaseOrderState.DONE})
 _SHORT_RATE = 0.25
 _SPLIT_RATE = 0.15
+_SHUTDOWN_WEEKDAY = 6  # no production on Sundays
+_LOTTED_PREFIXES = ('ING-', 'PKG-')
+_LAST_BATCH_DAYS_BEFORE_ANCHOR = 2
 
 
 class DiscrepancyKind(StrEnum):
@@ -129,11 +139,20 @@ _StockPlan = tuple[tuple[StockLevel, ...], dict[str, Decimal], frozenset[str]]
 
 
 @dataclass(frozen=True)
+class RecallScope:
+    """Everything a recall of one supplier lot must reach: finished lots and customers."""
+
+    finished_lots: frozenset[str]
+    customers: frozenset[str]
+
+
+@dataclass(frozen=True)
 class DemoTruth:
     """Planted answers for evaluation. Never exposed through the ERP."""
 
     below_reorder: frozenset[str]
     invoice_discrepancies: dict[str, DiscrepancyKind]
+    recall_scope: dict[str, RecallScope]
 
 
 @dataclass(frozen=True)
@@ -145,6 +164,11 @@ class DemoDataset:
     receipts: tuple[GoodsReceipt, ...]
     invoices: tuple[SupplierInvoice, ...]
     reorder_points: dict[str, Decimal]
+    supplier_lots: tuple[SupplierLot, ...]
+    batches: tuple[ProductionBatch, ...]
+    finished_lots: tuple[FinishedLot, ...]
+    customers: tuple[Customer, ...]
+    shipments: tuple[Shipment, ...]
     truth: DemoTruth
 
 
@@ -474,19 +498,260 @@ def _billing(
     return receipts, tuple(invoices), truth
 
 
+class _Recipe(NamedTuple):
+    name: str
+    ingredients: tuple[int, ...]  # positions in _SPECS; each draws a share of its order size
+    packaging: tuple[int, ...]  # positions in _SPECS; one piece per finished unit
+
+
+_RECIPES: tuple[_Recipe, ...] = (
+    _Recipe('Tropical Mango-Pineapple 500 ml', (0, 1), (20, 22, 23)),
+    _Recipe('Orange Fresh 500 ml', (2,), (20, 22, 23)),
+    _Recipe('Green Detox 500 ml', (11, 10, 7), (20, 22, 23)),
+    _Recipe('Ginger Turmeric Shot 250 ml', (4, 5, 7, 14), (19, 22)),
+    _Recipe('Carrot Beet Roots 1 L', (8, 9, 10), (21, 22, 24)),
+    _Recipe('Watermelon Cooler 500 ml', (3, 7), (20, 22, 23)),
+    _Recipe('Passion Coconut 500 ml', (6, 12, 13), (20, 22, 23)),
+)
+
+_CUSTOMERS = (
+    'Greenleaf Supermarkets',
+    'Karura Hotels Group',
+    'Mombasa Road Wholesalers',
+    'Lakeside Hospitality Ltd',
+    'FreshBasket Retail',
+    'Nairobi Wellness Cafes',
+    'Savanna Distributors',
+    'Highrise Office Catering',
+    'Kisumu Fresh Mart',
+    'Coastline Resorts',
+    'Everyday Minimarts',
+    'Campus Juice Kiosks',
+)
+
+
+class _Produced(NamedTuple):
+    batches: tuple[ProductionBatch, ...]
+    finished: tuple[FinishedLot, ...]
+    used_in: dict[str, set[str]]  # supplier lot ref -> refs of batches that consumed it
+
+
+class _Trace(NamedTuple):
+    supplier_lots: tuple[SupplierLot, ...]
+    batches: tuple[ProductionBatch, ...]
+    finished_lots: tuple[FinishedLot, ...]
+    customers: tuple[Customer, ...]
+    shipments: tuple[Shipment, ...]
+    scope: dict[str, RecallScope]
+
+
+def _supplier_lots(
+    receipts: tuple[GoodsReceipt, ...], products: tuple[Product, ...]
+) -> tuple[SupplierLot, ...]:
+    """One lot per ingredient or packaging receipt line; chemicals are not lotted."""
+    lotted = {
+        product.ref
+        for product in products
+        if (product.default_code or '').startswith(_LOTTED_PREFIXES)
+    }
+    lots: list[SupplierLot] = []
+    for receipt in receipts:
+        for item in receipt.lines:
+            if item.product_ref in lotted:
+                lots.append(
+                    SupplierLot(
+                        ref=f'SL-{len(lots) + 1:05d}',
+                        product_ref=item.product_ref,
+                        receipt_ref=receipt.ref,
+                        received_at=receipt.received_at,
+                        quantity=item.quantity,
+                    )
+                )
+    return tuple(lots)
+
+
+def _draw(
+    lots: list[SupplierLot], remaining: dict[str, Decimal], at: datetime, need: Decimal
+) -> list[BatchConsumption] | None:
+    """Take the quantity oldest-first (FIFO) from lots already received; None if short."""
+    taken: list[BatchConsumption] = []
+    still_needed = need
+    for lot in lots:
+        if lot.received_at > at or remaining[lot.ref] <= 0:
+            continue
+        quantity = min(remaining[lot.ref], still_needed)
+        taken.append(BatchConsumption(supplier_lot_ref=lot.ref, quantity=quantity))
+        still_needed -= quantity
+        if still_needed <= 0:
+            return taken
+    return None
+
+
+def _plan_batch(
+    rng: random.Random,
+    recipe: _Recipe,
+    units: int,
+    started: datetime,
+    lots_by_product: dict[str, list[SupplierLot]],
+    remaining: dict[str, Decimal],
+) -> list[BatchConsumption] | None:
+    """All consumption lines for one batch, or None if any component is short of stock."""
+    plan: list[BatchConsumption] = []
+    for position in recipe.ingredients:
+        percent = rng.choice((25, 40, 50))
+        need = Decimal(max(1, _SPECS[position].order_qty * percent // 100))
+        drawn = _draw(lots_by_product.get(_ref(position), []), remaining, started, need)
+        if drawn is None:
+            return None
+        plan.extend(drawn)
+    for position in recipe.packaging:
+        drawn = _draw(lots_by_product.get(_ref(position), []), remaining, started, Decimal(units))
+        if drawn is None:
+            return None
+        plan.extend(drawn)
+    return plan
+
+
+def _produce(rng: random.Random, lots: tuple[SupplierLot, ...]) -> _Produced:
+    """Daily production: stock is only committed when a whole batch can be supplied."""
+    lots_by_product: dict[str, list[SupplierLot]] = {}
+    for lot in lots:
+        lots_by_product.setdefault(lot.product_ref, []).append(lot)
+    remaining = {lot.ref: lot.quantity for lot in lots}
+    batches: list[ProductionBatch] = []
+    finished: list[FinishedLot] = []
+    used_in: dict[str, set[str]] = {}
+    earliest = min(lot.received_at for lot in lots)
+    day = earliest.replace(hour=0, minute=0, second=0, microsecond=0)
+    last_day = ANCHOR - timedelta(days=_LAST_BATCH_DAYS_BEFORE_ANCHOR)
+    while day <= last_day:
+        if day.weekday() != _SHUTDOWN_WEEKDAY:
+            started = day + timedelta(hours=rng.randint(6, 14))
+            for recipe in rng.sample(_RECIPES, len(_RECIPES)):
+                units = rng.choice((2000, 3000, 4000))
+                plan = _plan_batch(rng, recipe, units, started, lots_by_product, remaining)
+                if plan is None:
+                    continue
+                number = len(batches) + 1
+                batch_ref = f'B-{number:04d}'
+                for use in plan:
+                    remaining[use.supplier_lot_ref] -= use.quantity
+                    used_in.setdefault(use.supplier_lot_ref, set()).add(batch_ref)
+                batches.append(
+                    ProductionBatch(
+                        ref=batch_ref,
+                        name=f'MO/{number:05d}',
+                        started_at=started,
+                        lines=tuple(plan),
+                    )
+                )
+                finished.append(
+                    FinishedLot(
+                        ref=f'FL-{number:04d}',
+                        batch_ref=batch_ref,
+                        product_name=recipe.name,
+                        produced_at=started + timedelta(hours=rng.randint(6, 10)),
+                        quantity=Decimal(units),
+                    )
+                )
+                break
+        day += timedelta(days=1)
+    return _Produced(tuple(batches), tuple(finished), used_in)
+
+
+def _ship(
+    rng: random.Random, finished: tuple[FinishedLot, ...], customers: tuple[Customer, ...]
+) -> tuple[tuple[Shipment, ...], dict[str, set[str]]]:
+    """Split each finished lot across 1-4 customers; recent lots may not have shipped yet."""
+    lines_by_stop: dict[tuple[str, datetime], list[ShipmentLine]] = {}
+    hour_by_stop: dict[tuple[str, datetime], int] = {}
+    customers_of: dict[str, set[str]] = {}
+    for lot in finished:
+        delay_days = rng.randint(1, 6)
+        shipped_total = lot.quantity * rng.randint(70, 100) // 100
+        buyers = rng.sample(customers, rng.randint(1, 4))
+        produced_day = lot.produced_at.replace(hour=0, minute=0, second=0, microsecond=0)
+        dispatch_day = produced_day + timedelta(days=delay_days)
+        if dispatch_day >= ANCHOR:
+            continue
+        share = shipped_total // len(buyers)
+        for buyer in buyers:
+            stop = (buyer.ref, dispatch_day)
+            lines_by_stop.setdefault(stop, []).append(
+                ShipmentLine(finished_lot_ref=lot.ref, quantity=share)
+            )
+            if stop not in hour_by_stop:
+                hour_by_stop[stop] = rng.randint(7, 16)
+            customers_of.setdefault(lot.ref, set()).add(buyer.ref)
+    ordered = sorted(
+        lines_by_stop, key=lambda stop: (stop[1] + timedelta(hours=hour_by_stop[stop]), stop[0])
+    )
+    shipments = tuple(
+        Shipment(
+            ref=f'SH-{number:04d}',
+            customer_ref=stop[0],
+            shipped_at=stop[1] + timedelta(hours=hour_by_stop[stop]),
+            lines=tuple(lines_by_stop[stop]),
+        )
+        for number, stop in enumerate(ordered, start=1)
+    )
+    return shipments, customers_of
+
+
+def _traceability(
+    rng: random.Random, receipts: tuple[GoodsReceipt, ...], products: tuple[Product, ...]
+) -> _Trace:
+    """Lots, batches, finished lots, customers and shipments, plus each lot's recall scope."""
+    lots = _supplier_lots(receipts, products)
+    produced = _produce(rng, lots)
+    customers = tuple(
+        Customer(ref=f'C-{number:03d}', name=name)
+        for number, name in enumerate(_CUSTOMERS, start=1)
+    )
+    shipments, customers_of = _ship(rng, produced.finished, customers)
+    finished_of: dict[str, set[str]] = {}
+    for finished_lot in produced.finished:
+        finished_of.setdefault(finished_lot.batch_ref, set()).add(finished_lot.ref)
+    scope: dict[str, RecallScope] = {}
+    for lot in lots:
+        reached = {
+            finished_ref
+            for batch_ref in produced.used_in.get(lot.ref, set())
+            for finished_ref in finished_of[batch_ref]
+        }
+        reached_customers = {
+            customer_ref
+            for finished_ref in reached
+            for customer_ref in customers_of.get(finished_ref, set())
+        }
+        scope[lot.ref] = RecallScope(frozenset(reached), frozenset(reached_customers))
+    return _Trace(lots, produced.batches, produced.finished, customers, shipments, scope)
+
+
 def build_demo_dataset(seed: int = DEFAULT_SEED) -> DemoDataset:
     """Build the full dataset. The same seed always yields an identical result."""
     rng = random.Random(seed)
     stock, reorder_points, below = _stock_and_reorder(rng)
     orders = _purchase_orders(rng)
     receipts, invoices, discrepancies = _billing(rng, orders)
+    products = _products()
+    trace = _traceability(rng, receipts, products)  # drawn last: earlier data stays stable
     return DemoDataset(
-        products=_products(),
+        products=products,
         partners=_partners(),
         stock=stock,
         purchase_orders=orders,
         receipts=receipts,
         invoices=invoices,
         reorder_points=reorder_points,
-        truth=DemoTruth(below_reorder=below, invoice_discrepancies=discrepancies),
+        supplier_lots=trace.supplier_lots,
+        batches=trace.batches,
+        finished_lots=trace.finished_lots,
+        customers=trace.customers,
+        shipments=trace.shipments,
+        truth=DemoTruth(
+            below_reorder=below,
+            invoice_discrepancies=discrepancies,
+            recall_scope=trace.scope,
+        ),
     )
