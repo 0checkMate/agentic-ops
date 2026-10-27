@@ -59,3 +59,31 @@ class NewPurchaseOrder(DomainModel):
     partner_ref: str
     lines: tuple[PurchaseOrderLine, ...] = Field(min_length=1)
     idempotency_key: str
+
+
+class GoodsReceiptLine(DomainModel):
+    product_ref: str
+    quantity: Decimal = Field(gt=0)
+
+
+class GoodsReceipt(DomainModel):
+    ref: str
+    name: str
+    purchase_order_ref: str
+    received_at: datetime
+    lines: tuple[GoodsReceiptLine, ...] = Field(min_length=1)
+
+
+class SupplierInvoiceLine(DomainModel):
+    product_ref: str
+    quantity: Decimal = Field(gt=0)
+    price_unit: Decimal = Field(ge=0)
+
+
+class SupplierInvoice(DomainModel):
+    ref: str
+    number: str
+    partner_ref: str
+    purchase_order_ref: str
+    invoice_date: datetime
+    lines: tuple[SupplierInvoiceLine, ...] = Field(min_length=1)

@@ -8,15 +8,20 @@ import random
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal
+from enum import StrEnum
 from typing import NamedTuple
 
 from agentic_ops.erp.models import (
+    GoodsReceipt,
+    GoodsReceiptLine,
     Partner,
     Product,
     PurchaseOrder,
     PurchaseOrderLine,
     PurchaseOrderState,
     StockLevel,
+    SupplierInvoice,
+    SupplierInvoiceLine,
 )
 
 ANCHOR = datetime(2026, 10, 1)
@@ -27,6 +32,26 @@ _BELOW_REORDER_COUNT = 8
 _COLD = 'WH/Cold'
 _AMBIENT = 'WH/Stock'
 _CHEM = 'WH/Chem'
+
+PRICE_TOLERANCE = Decimal('0.02')
+_BILLABLE = frozenset({PurchaseOrderState.PURCHASE, PurchaseOrderState.DONE})
+_SHORT_RATE = 0.25
+_SPLIT_RATE = 0.15
+
+
+class DiscrepancyKind(StrEnum):
+    QUANTITY_MISMATCH = 'quantity_mismatch'
+    PRICE_MISMATCH = 'price_mismatch'
+    NO_RECEIPT = 'no_receipt'
+    UNORDERED_ITEM = 'unordered_item'
+    DUPLICATE = 'duplicate'
+
+
+_CORRUPTIONS = (
+    DiscrepancyKind.QUANTITY_MISMATCH,
+    DiscrepancyKind.PRICE_MISMATCH,
+    DiscrepancyKind.UNORDERED_ITEM,
+)
 
 
 class _Spec(NamedTuple):
@@ -108,6 +133,7 @@ class DemoTruth:
     """Planted answers for evaluation. Never exposed through the ERP."""
 
     below_reorder: frozenset[str]
+    invoice_discrepancies: dict[str, DiscrepancyKind]
 
 
 @dataclass(frozen=True)
@@ -116,6 +142,8 @@ class DemoDataset:
     partners: tuple[Partner, ...]
     stock: tuple[StockLevel, ...]
     purchase_orders: tuple[PurchaseOrder, ...]
+    receipts: tuple[GoodsReceipt, ...]
+    invoices: tuple[SupplierInvoice, ...]
     reorder_points: dict[str, Decimal]
     truth: DemoTruth
 
@@ -228,15 +256,237 @@ def _purchase_orders(rng: random.Random) -> tuple[PurchaseOrder, ...]:
     )
 
 
+class _ReceiptDraft(NamedTuple):
+    received_at: datetime
+    order_ref: str
+    lines: tuple[GoodsReceiptLine, ...]
+
+
+class _Base(NamedTuple):
+    order: PurchaseOrder
+    invoice_date: datetime
+    lines: tuple[SupplierInvoiceLine, ...]
+
+
+class _InvoiceDraft(NamedTuple):
+    invoice_date: datetime
+    sequence: int
+    number: str
+    order: PurchaseOrder
+    lines: tuple[SupplierInvoiceLine, ...]
+    kind: DiscrepancyKind | None
+
+
+def _placed(order: PurchaseOrder) -> datetime:
+    if order.date_order is None:
+        raise ValueError(f'Order {order.ref} has no order date')
+    return order.date_order
+
+
+def _delay(rng: random.Random, start: datetime, low: int, high: int) -> datetime:
+    """A moment after start, never later than the anchor."""
+    return min(ANCHOR, start + timedelta(days=rng.randint(low, high), hours=rng.randint(1, 8)))
+
+
+def _receive(
+    rng: random.Random, order: PurchaseOrder
+) -> tuple[list[_ReceiptDraft], dict[str, Decimal]]:
+    """One or two goods receipts for an order; some deliveries are short, some split."""
+    received: dict[str, Decimal] = {}
+    any_short = False
+    for line in order.lines:
+        if rng.random() < _SHORT_RATE:
+            any_short = True
+            received[line.product_ref] = line.product_qty * rng.randint(50, 90) // 100
+        else:
+            received[line.product_ref] = line.product_qty
+    first_at = _delay(rng, _placed(order), 2, 14)
+    if any_short or rng.random() >= _SPLIT_RATE:
+        lines = tuple(
+            GoodsReceiptLine(product_ref=ref, quantity=quantity)
+            for ref, quantity in received.items()
+        )
+        return [_ReceiptDraft(first_at, order.ref, lines)], received
+    first = tuple(
+        GoodsReceiptLine(product_ref=line.product_ref, quantity=line.product_qty * 60 // 100)
+        for line in order.lines
+    )
+    rest = tuple(
+        GoodsReceiptLine(
+            product_ref=line.product_ref,
+            quantity=line.product_qty - line.product_qty * 60 // 100,
+        )
+        for line in order.lines
+    )
+    second_at = _delay(rng, first_at, 2, 7)
+    drafts = [_ReceiptDraft(first_at, order.ref, first), _ReceiptDraft(second_at, order.ref, rest)]
+    return drafts, received
+
+
+def _clean_lines(
+    rng: random.Random, order: PurchaseOrder, received: dict[str, Decimal]
+) -> tuple[SupplierInvoiceLine, ...]:
+    """Bill what arrived, at the order price with occasional noise inside tolerance."""
+    lines: list[SupplierInvoiceLine] = []
+    for line in order.lines:
+        factor = rng.randint(985, 1015) if rng.random() < 0.3 else 1000
+        price = (line.price_unit * factor / 1000).quantize(Decimal('0.01'))
+        lines.append(
+            SupplierInvoiceLine(
+                product_ref=line.product_ref,
+                quantity=received[line.product_ref],
+                price_unit=price,
+            )
+        )
+    return tuple(lines)
+
+
+def _corrupt(
+    rng: random.Random,
+    kind: DiscrepancyKind,
+    order: PurchaseOrder,
+    lines: tuple[SupplierInvoiceLine, ...],
+) -> tuple[SupplierInvoiceLine, ...]:
+    """Plant one defect in an otherwise clean invoice."""
+    if kind is DiscrepancyKind.UNORDERED_ITEM:
+        on_order = {line.product_ref for line in order.lines}
+        position = rng.choice([p for p in range(len(_SPECS)) if _ref(p) not in on_order])
+        spec = _SPECS[position]
+        extra = SupplierInvoiceLine(
+            product_ref=_ref(position),
+            quantity=Decimal(spec.order_qty),
+            price_unit=Decimal(spec.price),
+        )
+        return (*lines, extra)
+    index = rng.randrange(len(lines))
+    target = lines[index]
+    if kind is DiscrepancyKind.QUANTITY_MISMATCH:
+        changed = SupplierInvoiceLine(
+            product_ref=target.product_ref,
+            quantity=target.quantity + max(Decimal(1), target.quantity // 10),
+            price_unit=target.price_unit,
+        )
+    elif kind is DiscrepancyKind.PRICE_MISMATCH:
+        raised = (target.price_unit * rng.randint(110, 130) / 100).quantize(Decimal('0.01'))
+        changed = SupplierInvoiceLine(
+            product_ref=target.product_ref, quantity=target.quantity, price_unit=raised
+        )
+    else:
+        raise ValueError(f'Cannot corrupt an invoice with {kind}')
+    return (*lines[:index], changed, *lines[index + 1 :])
+
+
+def _billing(
+    rng: random.Random, orders: tuple[PurchaseOrder, ...]
+) -> tuple[tuple[GoodsReceipt, ...], tuple[SupplierInvoice, ...], dict[str, DiscrepancyKind]]:
+    """Receipts and invoices for billable orders, with every planted defect recorded."""
+    receipt_drafts: list[_ReceiptDraft] = []
+    bases: list[_Base] = []
+    unreceipted: list[PurchaseOrder] = []
+    for order in orders:
+        if order.state not in _BILLABLE:
+            continue
+        done = order.state is PurchaseOrderState.DONE
+        if rng.random() >= (0.92 if done else 0.5):
+            unreceipted.append(order)
+            continue
+        drafts, received = _receive(rng, order)
+        receipt_drafts.extend(drafts)
+        if rng.random() < (0.9 if done else 0.3):
+            last = max(draft.received_at for draft in drafts)
+            invoice_date = _delay(rng, last, 1, 10)
+            bases.append(_Base(order, invoice_date, _clean_lines(rng, order, received)))
+
+    corrupted = rng.sample(range(len(bases)), max(3, len(bases) // 8))
+    kind_by_base = {
+        index: _CORRUPTIONS[position % len(_CORRUPTIONS)]
+        for position, index in enumerate(corrupted)
+    }
+    clean = [index for index in range(len(bases)) if index not in kind_by_base]
+    duplicated = rng.sample(clean, max(2, len(bases) // 20))
+
+    invoice_drafts: list[_InvoiceDraft] = []
+    for index, base in enumerate(bases):
+        kind = kind_by_base.get(index)
+        lines = base.lines if kind is None else _corrupt(rng, kind, base.order, base.lines)
+        number = f'{base.order.partner_ref}-{1000 + index}'
+        invoice_drafts.append(
+            _InvoiceDraft(base.invoice_date, index, number, base.order, lines, kind)
+        )
+    sequence = len(bases)
+    for index in duplicated:
+        original = invoice_drafts[index]
+        later = min(ANCHOR, original.invoice_date + timedelta(days=rng.randint(1, 9)))
+        invoice_drafts.append(
+            _InvoiceDraft(
+                later,
+                sequence,
+                original.number,
+                original.order,
+                original.lines,
+                DiscrepancyKind.DUPLICATE,
+            )
+        )
+        sequence += 1
+    for order in rng.sample(unreceipted, min(len(unreceipted), max(3, len(unreceipted) // 4))):
+        lines = tuple(
+            SupplierInvoiceLine(
+                product_ref=line.product_ref, quantity=line.product_qty, price_unit=line.price_unit
+            )
+            for line in order.lines
+        )
+        invoice_date = _delay(rng, _placed(order), 3, 20)
+        number = f'{order.partner_ref}-{1000 + sequence}'
+        invoice_drafts.append(
+            _InvoiceDraft(invoice_date, sequence, number, order, lines, DiscrepancyKind.NO_RECEIPT)
+        )
+        sequence += 1
+
+    receipts = tuple(
+        GoodsReceipt(
+            ref=f'GR-{number:04d}',
+            name=f'WH/IN/{number:05d}',
+            purchase_order_ref=draft.order_ref,
+            received_at=draft.received_at,
+            lines=draft.lines,
+        )
+        for number, draft in enumerate(
+            sorted(receipt_drafts, key=lambda draft: draft.received_at), start=1
+        )
+    )
+    invoices: list[SupplierInvoice] = []
+    truth: dict[str, DiscrepancyKind] = {}
+    ordered = sorted(invoice_drafts, key=lambda draft: (draft.invoice_date, draft.sequence))
+    for position, draft in enumerate(ordered, start=1):
+        ref = f'BILL-{position:04d}'
+        invoices.append(
+            SupplierInvoice(
+                ref=ref,
+                number=draft.number,
+                partner_ref=draft.order.partner_ref,
+                purchase_order_ref=draft.order.ref,
+                invoice_date=draft.invoice_date,
+                lines=draft.lines,
+            )
+        )
+        if draft.kind is not None:
+            truth[ref] = draft.kind
+    return receipts, tuple(invoices), truth
+
+
 def build_demo_dataset(seed: int = DEFAULT_SEED) -> DemoDataset:
     """Build the full dataset. The same seed always yields an identical result."""
     rng = random.Random(seed)
     stock, reorder_points, below = _stock_and_reorder(rng)
+    orders = _purchase_orders(rng)
+    receipts, invoices, discrepancies = _billing(rng, orders)
     return DemoDataset(
         products=_products(),
         partners=_partners(),
         stock=stock,
-        purchase_orders=_purchase_orders(rng),
+        purchase_orders=orders,
+        receipts=receipts,
+        invoices=invoices,
         reorder_points=reorder_points,
-        truth=DemoTruth(below_reorder=below),
+        truth=DemoTruth(below_reorder=below, invoice_discrepancies=discrepancies),
     )
