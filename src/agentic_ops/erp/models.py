@@ -133,3 +133,24 @@ class Shipment(DomainModel):
     customer_ref: str
     shipped_at: datetime
     lines: tuple[ShipmentLine, ...] = Field(min_length=1)
+
+
+class Equipment(DomainModel):
+    ref: str
+    name: str
+    kind: str
+    location: str
+
+
+class MaintenanceKind(StrEnum):
+    PREVENTIVE = 'preventive'
+    CORRECTIVE = 'corrective'
+
+
+class MaintenanceOrder(DomainModel):
+    ref: str
+    equipment_ref: str
+    kind: MaintenanceKind
+    opened_at: datetime
+    closed_at: datetime
+    description: str
