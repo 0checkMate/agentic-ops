@@ -1,6 +1,8 @@
 from collections.abc import Iterable, Sequence
+from typing import Self
 
 from agentic_ops.erp.errors import ErpNotFound, ErpValidationError
+from agentic_ops.erp.mock.demo_seed import DemoDataset
 from agentic_ops.erp.models import (
     NewPurchaseOrder,
     Partner,
@@ -29,6 +31,18 @@ class MockErp:
         self._partners = {p.ref: p for p in partners}
         self._orders: dict[str, PurchaseOrder] = {}
         self._order_ref_by_key: dict[str, str] = {}
+
+    @classmethod
+    def from_dataset(cls, dataset: DemoDataset) -> Self:
+        """Build a MockErp from the generated demo dataset.
+
+        Loads only what ErpPort reads: catalogue, stock and partners.
+        """
+        return cls(
+            products=dataset.products,
+            stock=dataset.stock,
+            partners=dataset.partners,
+        )
 
     async def list_products(self, *, limit: int = 100, offset: int = 0) -> Sequence[Product]:
         ordered = sorted(self._products.values(), key=lambda p: p.ref)
