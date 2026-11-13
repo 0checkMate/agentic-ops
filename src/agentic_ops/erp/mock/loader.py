@@ -1,10 +1,12 @@
-"""Load the generated demo dataset into a normalized mock_erp Postgres schema.
+"""
+Load the generated demo dataset into a normalized mock_erp Postgres schema.
 
 The schema is demo data owned by this loader: dropped and recreated on every load, never
 migrated by Alembic (it lives on its own MetaData, not on the ORM Base).
 The caller owns the transaction, as with record_event.
 """
 
+import re
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -18,12 +20,15 @@ from sqlalchemy import (
     Numeric,
     String,
     Table,
+    text,
 )
 from sqlalchemy.ext.asyncio import AsyncConnection
 
 from agentic_ops.erp.mock.demo_seed import DemoDataset
 
 SCHEMA = 'mock_erp'
+READONLY_ROLE = 'agentic_readonly'
+_SAFE_PASSWORD = re.compile(r'[A-Za-z0-9_-]{16,128}')
 
 metadata = MetaData(schema=SCHEMA)
 
@@ -384,3 +389,24 @@ async def load_dataset(conn: AsyncConnection, dataset: DemoDataset) -> None:
             for n, line in enumerate(s.lines, start=1)
         ],
     )
+
+
+async def provision_readonly_role(conn: AsyncConnection, password: str) -> None:
+    """Create or update the read-only SQL role and grant it SELECT on mock_erp only.
+
+    Run after every load_dataset: dropping the schema also drops its grants.
+    The password is interpolated into DDL because Postgres cannot bind parameters there,
+    so only a strict character set is accepted.
+    """
+    if _SAFE_PASSWORD.fullmatch(password) is None:
+        raise ValueError('password must be 16-128 characters from A-Z a-z 0-9 _ -')
+    exists = (
+        await conn.execute(
+            text('SELECT 1 FROM pg_roles WHERE rolname = :name'), {'name': READONLY_ROLE}
+        )
+    ).first()
+    verb = 'ALTER' if exists else 'CREATE'
+    await conn.exec_driver_sql(f"{verb} ROLE {READONLY_ROLE} LOGIN PASSWORD '{password}'")
+    await conn.exec_driver_sql(f'ALTER ROLE {READONLY_ROLE} SET default_transaction_read_only = on')
+    await conn.exec_driver_sql(f'GRANT USAGE ON SCHEMA {SCHEMA} TO {READONLY_ROLE}')
+    await conn.exec_driver_sql(f'GRANT SELECT ON ALL TABLES IN SCHEMA {SCHEMA} TO {READONLY_ROLE}')
