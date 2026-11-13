@@ -514,6 +514,8 @@ _RECIPES: tuple[_Recipe, ...] = (
     _Recipe('Passion Coconut 500 ml', (6, 12, 13), (20, 22, 23)),
 )
 
+FINISHED_PRODUCT_NAMES: tuple[str, ...] = tuple(recipe.name for recipe in _RECIPES)
+
 _CUSTOMERS = (
     'Greenleaf Supermarkets',
     'Karura Hotels Group',
