@@ -2,7 +2,6 @@
 
 import json
 from collections.abc import Sequence
-from decimal import Decimal
 from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
@@ -15,60 +14,7 @@ from agentic_ops.agents.procurement import (
     build_procurement_tools,
 )
 from agentic_ops.agents.supervisor import AgentState
-from agentic_ops.erp.errors import ErpNotFound, ErpValidationError
-from agentic_ops.erp.models import (
-    NewPurchaseOrder,
-    Partner,
-    Product,
-    PurchaseOrder,
-    PurchaseOrderState,
-    StockLevel,
-)
-
-
-class FakeErp:
-    """Minimal in-memory ErpPort: one product, one supplier, idempotent drafts."""
-
-    def __init__(self) -> None:
-        self.orders: dict[str, PurchaseOrder] = {}
-        self.list_limits: list[int] = []
-
-    async def list_products(self, *, limit: int = 100, offset: int = 0) -> Sequence[Product]:
-        self.list_limits.append(limit)
-        return [Product(ref='P1', name='Wheat flour', uom='kg')]
-
-    async def get_stock_levels(self, product_ref: str | None = None) -> Sequence[StockLevel]:
-        if product_ref not in (None, 'P1'):
-            raise ErpNotFound(f'product {product_ref}')
-        return [StockLevel(product_ref='P1', location='WH/Stock', quantity=Decimal('120.5'))]
-
-    async def get_vendor(self, partner_ref: str) -> Partner:
-        if partner_ref != 'V1':
-            raise ErpNotFound(f'partner {partner_ref}')
-        return Partner(ref='V1', name='Unga Ltd', is_supplier=True)
-
-    async def create_draft_po(self, order: NewPurchaseOrder) -> PurchaseOrder:
-        if order.partner_ref != 'V1':
-            raise ErpValidationError(f'unknown partner {order.partner_ref}')
-        existing = self.orders.get(order.idempotency_key)
-        if existing is not None:
-            return existing
-        number = len(self.orders) + 1
-        created = PurchaseOrder(
-            ref=f'PO{number:04d}',
-            name=f'P{number:05d}',
-            partner_ref=order.partner_ref,
-            state=PurchaseOrderState.DRAFT,
-            lines=order.lines,
-        )
-        self.orders[order.idempotency_key] = created
-        return created
-
-    async def get_purchase_order(self, po_ref: str) -> PurchaseOrder:
-        for order in self.orders.values():
-            if order.ref == po_ref:
-                return order
-        raise ErpNotFound(f'purchase order {po_ref}')
+from tests.unit.support import DRAFT_ARGS, FakeErp
 
 
 def tool_by_name(tools: Sequence[BaseTool], name: str) -> BaseTool:
@@ -82,12 +28,6 @@ async def call(erp: FakeErp, name: str, args: dict[str, Any]) -> str:
     result = await tool_by_name(build_procurement_tools(erp), name).ainvoke(args)
     assert isinstance(result, str)
     return result
-
-
-DRAFT_ARGS: dict[str, Any] = {
-    'partner_ref': 'V1',
-    'lines': [{'product_ref': 'P1', 'product_qty': '10', 'price_unit': '2.5'}],
-}
 
 
 def test_tool_names_expose_no_confirmation() -> None:

@@ -6,8 +6,11 @@ from collections.abc import Awaitable, Sequence
 from decimal import Decimal
 from typing import Annotated, Any
 
+from langchain.agents import create_agent
+from langchain_core.language_models import BaseChatModel
 from langchain_core.runnables import Runnable
 from langchain_core.tools import BaseTool, tool
+from langgraph.graph.state import CompiledStateGraph
 from pydantic import BaseModel, Field
 
 from agentic_ops.agents.supervisor import AgentState, Specialist
@@ -115,6 +118,28 @@ def build_procurement_tools(erp: ErpPort) -> list[BaseTool]:
         return await _guard(run())
 
     return [list_products, get_stock_levels, get_vendor, create_draft_po, get_purchase_order]
+
+
+PROCUREMENT_PROMPT = (
+    'You are the procurement specialist of an operations platform. '
+    'Use the tools to look up products, stock levels and suppliers, and to prepare '
+    'purchase orders. You can only create DRAFT purchase orders: a human confirms them '
+    'in the ERP, so never claim an order is placed or approved. Look up references with '
+    'the tools instead of guessing them. If a tool returns an ERROR, read it, correct '
+    'your call or explain the problem. Answer concisely and quote the draft reference.'
+)
+
+
+def build_procurement_agent(
+    model: BaseChatModel, erp: ErpPort
+) -> CompiledStateGraph[Any, Any, Any, Any]:
+    """Procurement agent: LangChain's tool loop over the ErpPort tools."""
+    return create_agent(
+        model=model,
+        tools=build_procurement_tools(erp),
+        system_prompt=PROCUREMENT_PROMPT,
+        name='procurement',
+    )
 
 
 def agent_as_specialist(agent: Runnable[Any, Any]) -> Specialist:

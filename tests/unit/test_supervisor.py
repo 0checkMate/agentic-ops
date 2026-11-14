@@ -1,70 +1,13 @@
 """Supervisor routing: handoff by tool call, direct answer, unknown agent, persistence."""
 
-from collections.abc import Sequence
-from typing import Any
-
-from langchain_core.callbacks import CallbackManagerForLLMRun
-from langchain_core.language_models import BaseChatModel, LanguageModelInput
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from langchain_core.outputs import ChatGeneration, ChatResult
-from langchain_core.runnables import Runnable, RunnableConfig
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.memory import InMemorySaver
 
-from agentic_ops.agents.supervisor import (
-    ROUTE_TOOL_NAME,
-    UNROUTABLE_REPLY,
-    AgentState,
-    Specialist,
-    build_supervisor_graph,
-)
+from agentic_ops.agents.supervisor import UNROUTABLE_REPLY, build_supervisor_graph
+from tests.unit.support import ScriptedChatModel, recording_specialist, route_call
 
 CONFIG: RunnableConfig = {'configurable': {'thread_id': 'thread-1'}}
-
-
-class ScriptedChatModel(BaseChatModel):
-    """Replays scripted AIMessages in order and records what it was shown."""
-
-    script: list[AIMessage]
-    seen: list[list[BaseMessage]] = []
-    cursor: int = 0
-
-    @property
-    def _llm_type(self) -> str:
-        return 'scripted'
-
-    def bind_tools(
-        self, tools: Sequence[Any], **kwargs: Any
-    ) -> Runnable[LanguageModelInput, AIMessage]:
-        return self
-
-    def _generate(
-        self,
-        messages: list[BaseMessage],
-        stop: list[str] | None = None,
-        run_manager: CallbackManagerForLLMRun | None = None,
-        **kwargs: Any,
-    ) -> ChatResult:
-        self.seen.append(list(messages))
-        reply = self.script[self.cursor]
-        self.cursor += 1
-        return ChatResult(generations=[ChatGeneration(message=reply)])
-
-
-def route_call(agent: str) -> AIMessage:
-    return AIMessage(
-        content='',
-        tool_calls=[
-            {'name': ROUTE_TOOL_NAME, 'args': {'agent': agent}, 'id': 'call_1', 'type': 'tool_call'}
-        ],
-    )
-
-
-def recording_specialist(name: str, calls: list[str]) -> Specialist:
-    async def node(state: AgentState) -> dict[str, Any]:
-        calls.append(name)
-        return {'messages': [AIMessage(content=f'{name} done', name=name)]}
-
-    return node
 
 
 async def test_routes_to_specialist_and_ends_turn() -> None:
