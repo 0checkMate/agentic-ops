@@ -20,6 +20,7 @@ dependencies = [
     "httpx",
     "tenacity",
     "langchain-core",
+    "langchain>=1.0",
     "langchain-openai",
     "openai",
     "langgraph>=1.2.16",
