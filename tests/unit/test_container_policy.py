@@ -25,7 +25,7 @@ def test_strict_msgpack_is_enabled() -> None:
 
 def test_start_command_uses_the_app_factory() -> None:
     text = (ROOT / 'Dockerfile').read_text()
-    assert 'agentic_ops.api.app:create_default_app' in text
+    assert 'agentic_ops.api.main:create_live_app' in text
     assert '--factory' in text
 
 

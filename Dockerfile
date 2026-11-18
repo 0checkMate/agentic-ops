@@ -16,4 +16,4 @@ RUN useradd --system --uid 10001 --no-create-home app
 COPY --from=build /opt/venv /opt/venv
 USER app
 EXPOSE 8000
-CMD ["sh", "-c", "exec uvicorn agentic_ops.api.app:create_default_app --factory --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["sh", "-c", "exec uvicorn agentic_ops.api.main:create_live_app --factory --host 0.0.0.0 --port ${PORT:-8000}"]
