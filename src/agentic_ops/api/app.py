@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from agentic_ops.api.chat import ChatGraph, build_chat_router
 from agentic_ops.db.session import get_sessionmaker
 
 logger = logging.getLogger(__name__)
@@ -27,8 +28,11 @@ def sql_db_check(factory: async_sessionmaker[AsyncSession]) -> DbCheck:
     return check
 
 
-def create_app(db_check: DbCheck) -> FastAPI:
-    """Application factory; the database probe is injected so tests need no database."""
+def create_app(db_check: DbCheck, *, graph: ChatGraph | None = None) -> FastAPI:
+    """Application factory; the probe and the graph are injected so tests need no database.
+
+    The /chat route exists only when a graph is supplied.
+    """
     app = FastAPI(title='agentic-ops')
 
     @app.get('/health')
@@ -47,6 +51,8 @@ def create_app(db_check: DbCheck) -> FastAPI:
             return JSONResponse({'status': 'ready'})
         return JSONResponse({'status': 'unavailable'}, status_code=503)
 
+    if graph is not None:
+        app.include_router(build_chat_router(graph))
     return app
 
 
