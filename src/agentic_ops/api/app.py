@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from starlette.types import Lifespan
 
 from agentic_ops.api.chat import ChatGraph, build_chat_router
 from agentic_ops.db.session import get_sessionmaker
@@ -28,12 +29,17 @@ def sql_db_check(factory: async_sessionmaker[AsyncSession]) -> DbCheck:
     return check
 
 
-def create_app(db_check: DbCheck, *, graph: ChatGraph | None = None) -> FastAPI:
+def create_app(
+    db_check: DbCheck,
+    *,
+    graph: ChatGraph | None = None,
+    lifespan: Lifespan[FastAPI] | None = None,
+) -> FastAPI:
     """Application factory; the probe and the graph are injected so tests need no database.
 
     The /chat route exists only when a graph is supplied.
     """
-    app = FastAPI(title='agentic-ops')
+    app = FastAPI(title='agentic-ops', lifespan=lifespan)
 
     @app.get('/health')
     async def health() -> dict[str, str]:
