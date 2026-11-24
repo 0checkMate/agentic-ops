@@ -69,18 +69,45 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: agentic
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v7
       - name: Build image
         run: docker build -t agentic-ops:ci .
       - name: Smoke test
+        env:
+          AGENTIC_DATABASE_URL: postgresql://postgres:postgres@host.docker.internal:5432/agentic
         run: |
           docker run -d --name app -p 8000:8000 \
-            -e AGENTIC_DATABASE_URL=postgresql://user:pass@localhost:5432/db \
+            --add-host=host.docker.internal:host-gateway \
+            -e AGENTIC_DATABASE_URL \
             agentic-ops:ci
           for attempt in $(seq 1 30); do
-            if curl -fsS http://localhost:8000/health; then exit 0; fi
-            sleep 1
+            if [ "$(docker inspect -f "{{.State.Running}}" app)" != "true" ]; then
+              echo "container exited early"
+              exit 1
+            fi
+            if curl -fsS --max-time 2 http://localhost:8000/ready; then
+              curl -fsS --max-time 2 http://localhost:8000/health
+              exit 0
+            fi
+            sleep 2
           done
-          docker logs app
+          echo "readiness timeout"
           exit 1
+      - name: Container logs
+        if: failure()
+        run: docker logs app
